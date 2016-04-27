@@ -1,6 +1,6 @@
 ---
 title: "MATH 216 Homework 4"
-author: "WRITE YOUR NAME HERE"
+author: "Phil Hoxie"
 output: html_document
 ---
 
@@ -17,15 +17,16 @@ suppressPackageStartupMessages(library(rgdal))
 suppressPackageStartupMessages(library(maptools))
 # For interactive maps
 suppressPackageStartupMessages(library(leaflet))
+suppressPackageStartupMessages(library(plotly))
 ```
 
 ## Admistrative:
 
 Please indicate
 
-* Who you collaborated with:
-* Roughly how much time you spent on this HW:
-* What gave you the most trouble:
+* Who you collaborated with:Mostly solo, although a bit with Christian and Delany
+* Roughly how much time you spent on this HW: 9hrs
+* What gave you the most trouble: merging the data to make the Bush map
 * Any comments you have: 
 
 
@@ -103,12 +104,95 @@ ggplot(data=NULL) +
 ### Write-Up
 
 ```{r, fig.width=12, fig.height=6}
+county_results <- read.csv(file = "C:/Users/Philip/Documents/Intro to Data Science/HW-4/COUNTY.csv", header = TRUE, sep = ",")
+county_results <- county_results %>% 
+  mutate(votes = sum(BUSH, GORE, NADER, BUCHANAN, BROWNE, PHILLIPS, WRITEINS, HAGELIN, MCREYNOLDS, HARRIS, DODGE,NOTA, MOOREHEAD, BROWN, VENSON, YOUNGKEIT, LANE, na.rm=TRUE))
+  
+county_vote <- county_results %>% 
+select(CID, STATE, COUNTY, PBUSH, PGORE, PNADER, POTHER, BUSH, GORE, NADER, votes) %>% 
+  mutate(bush.share = as.numeric(as.character(PBUSH)), 
+         gore.share = as.numeric(as.character(PGORE)), 
+         nader.share = as.numeric(as.character(PNADER)), 
+         other.share = as.numeric(as.character(POTHER)), 
+         bush = as.numeric(BUSH), 
+         gore = as.numeric(GORE), 
+         nader = as.numeric(NADER),
+         votes = as.numeric(votes))
+
+clean_text <- function(text){
+  text <- gsub("[^[:alnum:]]", "", text)
+  text <- gsub(" ", "", text)
+  text <- tolower(text)
+  return(text)
+}
+
+county_vote_clean <- county_vote %>% 
+  mutate(county = clean_text(as.character(COUNTY)), state = as.character(clean_text(STATE))) %>% 
+  tbl_df()
+
+counties_clean <- US_county %>% 
+  mutate(county = clean_text(subregion), state = clean_text(region)) %>% 
+  tbl_df()
+
+
+county_data <- left_join(counties_clean, county_vote_clean, by = c("county", "state"))
+
+```
+
+```{r, fig.width=12, fig.height=6}
+bush.map <- ggplot(data=NULL) +  
+  geom_polygon(data=US_county, aes(x=long, y=lat, group=group)) +
+  geom_polygon(data=county_data, aes(x=long, y=lat, group=group, fill=bush.share))+  
+  geom_path(data=US_county, aes(x=long, y=lat, group=group), col="grey", size=0.00001) +  
+  geom_path(data=US_state, aes(x=long, y=lat, group=group), col="black", size=0.0005) +  
+  scale_fill_gradient2(midpoint=0.5, low=("Blue"), high=("Red"), mid=("white"))+  
+  coord_map() +
+  ggtitle("Bush v. Gore 2000 Vote Share by County")
+bush.map
 
 ```
 
 
+```{r, fig.width=12, fig.height=6}
+state.hetero <- county_vote %>% 
+  group_by(STATE) %>% 
+  summarise(avg.bush = mean(bush.share), sd.bush = sd(bush.share), total.votes = sum(votes)) %>% 
+  mutate(cv = sd.bush/avg.bush)
+
+state.hetero$codes <- as.factor(c("AL","AK","AZ","AR","CA",
+               "CO","CT","DE","DC","FL",
+               "GA","HI","ID","IL","IN",
+               "IA","KS","KY","LA","ME",
+               "MD","MA","MI","MN","MS",
+               "MO","MT","NE","NV","NY",
+               "NH","NJ","NM","NC","ND",
+               "OH","OK","OR","PA","RI",
+               "SC","SD","TN","TX","UT",
+               "VT","VA","WA","WV","WI","WY"))
 
 
+state.hetero$hover <- with(state.hetero, paste(STATE, '<br>', "Avg", round(avg.bush,4), "Stnd.dev", round(sd.bush,4), "<br>",
+                           "votes (10 Thousads)",
+                           total.votes/10000))
+
+l <- list(color = toRGB("black"), width = 1)
+
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB('white')
+)
+
+plot_ly(state.hetero, z = cv, text = hover, locations = codes, type = 'choropleth',
+        locationmode = 'USA-states', color = cv, colors = 'Reds',
+        marker = list(line = l), colorbar = list(title = "County Vote CV")) %>%
+  layout(title = 'Heterogenious Voting within States, 2000<br>(Hover for breakdown)', geo = g)
+```
+
+The measure of heterogeniety in voting within a state that I used was the coefficient of variation (CV). Within each state, I calculated the coefficient of variation (CV) in Bush vote share among all the counties in that state. The CV is equal to the standard deviation divided by the sample mean. CV = sd/mean. The higher the CV, the more variation within the sample and therefore the greater heterogeneity in voting patterns. 
+
+The traditionaly democratic leaning states (CA, NY, NM, MD) appear darker red on the map thus indicating that they had very high CV's. This is most likely because liberal voters are clustered in big cities, whereas Republicans are more spread out. It appears that the plains state, which trend Republican, have greater homogeneity and therefore a lower CV. 
 
 
 ## Question 2:
@@ -153,5 +237,89 @@ the link to your app.
 Comment on general ethnic demographic trends that's more substantive than just
 "Vermont is really white."
 
+```{r, fig.width=12, fig.height=6}
+shapefile_name <- paste(getwd(), "/VT_census_tracts/tl_2015_50_tract.shp", sep="")
+VT <- readOGR(shapefile_name, layer = "tl_2015_50_tract", verbose = FALSE)
 
+vt.race <- read.csv(file = "C:/Users/Philip/Documents/Intro to Data Science/HW-4/vermont.races.2010.csv", header=TRUE, sep = ",")
+
+vt.race <- vt.race %>% 
+  mutate(white.1 = SE_T054_002/SE_T054_001, 
+         black = SE_T054_003/ SE_T054_001, 
+         asian = SE_T054_005/SE_T054_001, 
+         two = SE_T054_008/SE_T054_001, 
+         hisp = SE_T055_010/SE_T054_001)
+
+VT@data <- data.frame(VT@data, vt.race[match(VT@data$GEOID, vt.race$Geo_FIPS),])
+
+
+pal1 <- colorQuantile("Blues", VT$white.1, n = 5)
+leaflet(VT) %>%
+  addTiles() %>% 
+  addPolylines(color="black", weight=1) %>% 
+  addPolygons(
+    stroke = FALSE, fillOpacity = 0.5, smoothFactor = 0.5,
+    color = ~colorQuantile("Blues", VT$white.1, n = 5)(white.1)
+  ) %>% 
+  addLegend(pal = pal1, title = "White Population (2010)", values = ~white.1, opacity = 1)
+```
+
+Vermont is really white. However, the white population is less dense around Burlington, which is in the lower quintile compared to other areas of the state. Keep in mind, that these are relative quintiles that represent the percentage of whites in the population relative to the other census tracts. 
+
+```{r, fig.width=12, fig.height=6}
+pal2 <- colorQuantile("Greens", VT$black, n = 5)
+leaflet(VT) %>%
+  addTiles() %>% 
+  addPolylines(color="black", weight=1) %>% 
+  addPolygons(
+    stroke = FALSE, fillOpacity = 0.5, smoothFactor = 0.5,
+    color = ~colorQuantile("Greens", VT$black, n = 5)(black)
+  ) %>% 
+  addLegend(pal = pal2, title = "African-American Population (2010)", values = ~black, opacity = 1)
+```
+
+African Americans tend to cluster in Burlington and its suburbs. 
+
+```{r, fig.width=12, fig.height=6}
+pal3 <- colorQuantile("Reds", VT$asian, n = 5)
+leaflet(VT) %>%
+  addTiles() %>% 
+  addPolylines(color="black", weight=1) %>% 
+  addPolygons(
+    stroke = FALSE, fillOpacity = 0.5, smoothFactor = 0.5,
+    color = ~colorQuantile("Reds", VT$asian, n = 5)(asian)
+  ) %>% 
+  addLegend(pal = pal3, title = "Asian Population (2010)", values = ~asian, opacity = 1)
+```
+
+Asians appear to be relatively distributed throughout the state, however they don't seem to like the North East Kingdom and the eastern side of the Appalachian Mouz
+
+```{r, fig.width=12, fig.height=6}
+pal4 <- colorQuantile("Purples", VT$hisp, n = 5)
+leaflet(VT) %>%
+  addTiles() %>% 
+  addPolylines(color="black", weight=1) %>% 
+  addPolygons(
+    stroke = FALSE, fillOpacity = 0.5, smoothFactor = 0.5,
+    color = ~colorQuantile("Purples", VT$hisp, n = 5)(hisp)
+  ) %>% 
+  addLegend(pal = pal4, title = "Hispanic Population (2010)", values = ~hisp, opacity = 1)
+```
+
+Hispanics, Like African Americans seem to mostly live in Burlingtion. However, they also seem to populate the western border of the state.
+
+```{r, fig.width=12, fig.height=6}
+pal5 <- colorQuantile("Oranges", VT$two, n = 5)
+leaflet(VT) %>%
+  addTiles() %>% 
+  addPolylines(color="black", weight=1) %>% 
+  addPolygons(
+    stroke = FALSE, fillOpacity = 0.5, smoothFactor = 0.5,
+    color = ~colorQuantile("Oranges", VT$two, n = 5)(two)
+  ) %>% 
+  addLegend(pal = pal5, title = "Multi-Racial Population (2010)", values = ~two, opacity = 1)
+
+```
+
+There seems to be a fairly even distribution of people who identify as more than one race. There is a cluster of multiracial people in Burlingon, but the N.E. Kingdom and many of the areas north and east of Montpillier seem to be multiracial. 
 
