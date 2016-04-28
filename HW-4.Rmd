@@ -104,7 +104,7 @@ ggplot(data=NULL) +
 ### Write-Up
 
 ```{r, fig.width=12, fig.height=6}
-county_results <- read.csv(file = "C:/Users/Philip/Documents/Intro to Data Science/HW-4/COUNTY.csv", header = TRUE, sep = ",")
+county_results <- read.csv(file = "COUNTY.csv", header = TRUE, sep = ",")
 county_results <- county_results %>% 
   mutate(votes = sum(BUSH, GORE, NADER, BUCHANAN, BROWNE, PHILLIPS, WRITEINS, HAGELIN, MCREYNOLDS, HARRIS, DODGE,NOTA, MOOREHEAD, BROWN, VENSON, YOUNGKEIT, LANE, na.rm=TRUE))
   
@@ -241,7 +241,7 @@ Comment on general ethnic demographic trends that's more substantive than just
 shapefile_name <- paste(getwd(), "/VT_census_tracts/tl_2015_50_tract.shp", sep="")
 VT <- readOGR(shapefile_name, layer = "tl_2015_50_tract", verbose = FALSE)
 
-vt.race <- read.csv(file = "C:/Users/Philip/Documents/Intro to Data Science/HW-4/vermont.races.2010.csv", header=TRUE, sep = ",")
+vt.race <- read.csv(file = "vermont.races.2010.csv", header=TRUE, sep = ",")
 
 vt.race <- vt.race %>% 
   mutate(white.1 = SE_T054_002/SE_T054_001, 
